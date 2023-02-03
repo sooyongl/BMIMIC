@@ -1,0 +1,45 @@
+---
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = F)
+
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "vignettes",
+  out.width = "100%"
+)
+
+options(tibble.print_min = 5, tibble.print_max = 5)
+```
+
+# BMIMIC
+
+## Overview
+
+This package is for generating example simulation data for BMIMIC model which is introduced in **paper**. More information can be found in **paper**.
+
+## Install
+
+```{r}
+devtools::install_github("sooyongl/BMIMIC")
+```
+
+
+## Generate Data
+
+```{r}
+library(BMIMIC)
+
+sdat <- makeDat()
+```
+
+
+## Run BMIMIC model via rstan
+
+```{r}
+
+```
+
