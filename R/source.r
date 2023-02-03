@@ -1,13 +1,12 @@
 #' @export
-mkData <- function(N1, N2, nitem, mu_2, var_2,
-                   uni_dif, nonuni_dif, anchor_n) {
+mkData <- function(N1, N2, nitem, mu_2, var_2, uni_dif, nonuni_dif, anchor_n) {
 
   ipars <- genIRTpar(nitem)
   theta_1 <- rnorm(N1, 0, 1)
 
   # Make IRT data -----------------------------------------------------------
   # First group
-  data_g1 <- simData.irt(ipar = ipar, theta = theta_1)
+  data_g1 <- simData.irt(ipar = ipars, theta = theta_1)
   data_g1 <- data.frame(data_g1)
   data_g1$group <- 0
 
@@ -16,7 +15,7 @@ mkData <- function(N1, N2, nitem, mu_2, var_2,
   ipars$a <- ipars$a + nonuni_dif
   theta_2 <- rnorm(N2, mu_2, sqrt(var_2))
 
-  data_g2 <- simData.irt(ipar = ipar, theta = theta_2)
+  data_g2 <- simData.irt(ipar = ipars, theta = theta_2)
   data_g2 <- data.frame(data_g2)
   data_g2$group <- 1
 
@@ -25,7 +24,10 @@ mkData <- function(N1, N2, nitem, mu_2, var_2,
   # Make Stan data -----------------------------------------
   data_stan <- mk_staninpdata(data_irt, anchor_n = anchor_n)
 
-  data_stan
+  list(ipars = ipars,
+       response = data_stan$lv.resp,
+       group = data_stan$group,
+       stan_data = data_stan[-1])
 }
 
 
@@ -102,9 +104,9 @@ mk_stantype <- function(itemdata) { # info = sim_info
 
   res <- list(
     lv.resp  = lv.resp,
-    grad     = grad,       # score
-    studentM = studentM,   # ppindex
-    section  = section     # itemindex
+    response = grad,       # score
+    studIdx  = studentM,   # ppindex
+    itemIdx  = section     # itemindex
   )
 
   return(res)
@@ -125,9 +127,9 @@ mk_staninpdata <- function(dat, anchor_n, anchor_pos = 0) {
 
   data_stan$group <- dat[, ncol(dat)]             # group
   data_stan$firstitem <- c(1, rep(0, nitem-1))    # firstitem
-  data_stan$nsec <- nitem                         # nitem
+  data_stan$nitem <- nitem                         # nitem
   data_stan$nstud <- nrow(dat)                    # npp
-  data_stan$nsecWorked <- length(data_stan$grad)  # nppItem
+  data_stan$nitemWorked <- length(data_stan$response)  # nppItem
 
   data_stan$unidif_n <- nitem - anchor_n          # unidif_n
   data_stan$nondif_n <- nitem - anchor_n          # nondif_n
@@ -166,19 +168,8 @@ rowprod <- function(x) {
 # Generate Theta
 genTheta <- function(N, MU, SIG, BETA, sigE=1) {
 
-  # N = 1000
-  # MU = c(0,0)
-  # SIG = matrix(c(1,0.5,0.5,1), ncol = 2)
-  # BETA <- c(0.2, -0.2)
-  # BETA <- c(0.2, 0, -0.2)
-
   X <- mvrnorm(N, MU, SIG)
   X[,1] <- rbinom(N, 1, 0.5)
-  # if(inter) {
-  # X <- cbind(X, rowprod(X))
-  # fit <- lm(ETA ~ X1 : X2, data = data.frame(ETA, X))
-  # fit <- lm(ETA ~ X1 + X2 + X1:X2, data = data.frame(ETA, X))
-  # }
 
   ETA <- X %*% BETA + rnorm(N, 0, sigE)
   data <- data.frame(theta = ETA, X)
@@ -186,15 +177,12 @@ genTheta <- function(N, MU, SIG, BETA, sigE=1) {
 }
 
 # Generate IRT parameters
-genIRTpar <- function(nitem=28) {
-  # nitem = 10
-  # a = round(runif(nitem, 0.6, 1.4),3)
+genIRTpar <- function(nitem=10) {
+
   a = round(rlnorm(nitem, 0.1, 0.5),3)
   a[1] <- 1
   a[a > 1.5 ] <- round(runif(length(a[a > 1.5 ]), 0.8, 1.2),3)
   a[a < 0.6 ] <- round(runif(length(a[a < 0.6 ]), 0.8, 1.2),3)
-  # a[a > 2.5 ] <- round(runif(length(a[a > 2.5 ]), 0.5, 2),3)
-  # a[a < 0.5 ] <- round(runif(length(a[a < 0.5 ]), 0.5, 2),3)
   # a
   d = round(rnorm(nitem, 0, 1),3)
   d[1] <- 0
@@ -269,7 +257,6 @@ simData.mg <- function(ipar, data, DIF_eff, D = 1){
 # method for all dichotomous IRT model
 simData.dich <- function(ipar, data, DIF_eff, D = 1){
 
-
   a <- ipar$a
   d <- ipar$d
   g <- ipar$g
@@ -279,12 +266,6 @@ simData.dich <- function(ipar, data, DIF_eff, D = 1){
 
   nexaminee <- length(theta)
   nitem <- length(a)
-
-  # data generation
-  # pr <- matrix(NA, nexaminee, nitem)
-  # for (j in 1:nexaminee){
-  #   pr[j,] <- g + (1 - g) / (1 + exp(-D * (d + a * (theta[j]))))
-  # }
 
   pr <- matrix(NA, nexaminee, nitem)
   for (j in 1:nitem){
@@ -304,23 +285,11 @@ simData.dich <- function(ipar, data, DIF_eff, D = 1){
     g0 <- g[dif_item]
 
     pr[,dif_item] <- g0 + (1 - g0) / (1 + exp(-D * (DIF_prod + d0 + a0 * theta)))
-
-    # for (j in 1:nexaminee){ # j = 1
-    #
-    #   a0 <- a[dif_item]
-    #   d0 <- d[dif_item]
-    #   g0 <- g[dif_item]
-    #
-    #   pr[j,dif_item] <- g0 + (1 - g0) / (1 + exp(-D * (DIF_prod[j] + d0 + a0 * (theta[j]))))
-    # }
-
   }
 
   resp <- apply(pr, 2, function(x) {rbinom(nexaminee, 1, x)} )
 
-  # resp0 <- (matrix(runif(nexaminee*nitem), nexaminee, nitem) < pr) * 1
   colnames(resp) <- paste0("u", 1:nitem)
-
   data.frame(data, resp)
 }
 
