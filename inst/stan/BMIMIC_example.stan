@@ -23,7 +23,7 @@ data{
 
   // data
   int<lower=0,upper=1> group[nstud];
-  int<lower=0,upper=1> grad[nitemWorked];
+  int<lower=0,upper=1> response[nitemWorked];
 }
 
 parameters{
@@ -90,7 +90,7 @@ model{
 		
 	  }
 	  
-	grad[j] ~ bernoulli_logit(linPred[j]);
+	response[j] ~ bernoulli_logit(linPred[j]);
   }
   
 //priors
